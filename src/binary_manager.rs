@@ -67,9 +67,7 @@ impl BinaryManager {
                 ("win64", ".zip")
             }
             (_, zed::Architecture::X86) => {
-                return Err(format!(
-                    "Unsupported architecture: x86 (32-bit). NetCoreDbg only supports 64-bit architectures (amd64/arm64)."
-                ));
+                return Err("Unsupported architecture: x86 (32-bit). NetCoreDbg only supports 64-bit architectures (amd64/arm64).".to_string());
             }
         };
 
@@ -185,7 +183,7 @@ impl BinaryManager {
 
             if path.is_dir() {
                 // If there's a subdirectory, move its contents to version_dir
-                self.move_directory_contents(&path, version_dir)?;
+                Self::move_directory_contents(&path, version_dir)?;
                 found_content = true;
             } else {
                 // If there are files directly in temp_dir, move them
@@ -207,7 +205,6 @@ impl BinaryManager {
 
     /// Recursively moves all contents from source directory to destination directory
     fn move_directory_contents(
-        &self,
         source: &std::path::Path,
         dest: &std::path::Path,
     ) -> Result<(), String> {
@@ -225,7 +222,7 @@ impl BinaryManager {
             if source_path.is_dir() {
                 std::fs::create_dir_all(&dest_path)
                     .map_err(|e| format!("Failed to create directory: {}", e))?;
-                self.move_directory_contents(&source_path, &dest_path)?;
+                Self::move_directory_contents(&source_path, &dest_path)?;
             } else {
                 std::fs::rename(&source_path, &dest_path)
                     .map_err(|e| format!("Failed to move file: {}", e))?;
