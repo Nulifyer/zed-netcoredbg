@@ -37,16 +37,12 @@ pub struct NetCoreDbgDebugConfig {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 #[serde(untagged)]
 pub enum ProcessId {
-    /// Process ID as integer
     Int(i32),
-    /// Process ID as string
     String(String),
 }
 
-/// NetCoreDbg debug adapter extension
 #[derive(Default)]
 struct NetCoreDbgExtension {
-    /// Binary manager for handling netcoredbg binary operations
     binary_manager: BinaryManager,
 }
 
