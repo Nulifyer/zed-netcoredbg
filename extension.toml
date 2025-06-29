@@ -1,0 +1,10 @@
+id = "netcoredbg"
+name = "NetCoreDbg"
+version = "1.0.0"
+schema_version = 1
+authors = ["Mate Boros"]
+description = "NetCoreDbg debugger extension for .NET applications"
+repository = "https://github.com/qwadrox/zed-netcoredbg"
+
+[debug_adapters.netcoredbg]
+schema_path = "debug_adapter_schemas/netcoredbg.json"
