@@ -1,3 +1,4 @@
+use crate::logger::Logger;
 use std::sync::OnceLock;
 use tempfile::TempDir;
 use zed_extension_api::{self as zed, DownloadedFileType, GithubReleaseOptions};
@@ -15,6 +16,8 @@ pub struct AdapterVersion {
 pub struct BinaryManager {
     /// Cached path to the netcoredbg binary - set once and reused
     cached_binary_path: OnceLock<String>,
+    /// Logger instance for debug logging
+    logger: Logger,
 }
 
 impl Default for BinaryManager {
@@ -27,12 +30,10 @@ impl BinaryManager {
     const GITHUB_OWNER: &str = "qwadrox";
     const GITHUB_REPO: &str = "netcoredbg";
 
-    /// Enable/disable debug logging - set to false for production
-    const DEBUG_ENABLED: bool = true;
-
     pub fn new() -> Self {
         Self {
             cached_binary_path: OnceLock::new(),
+            logger: Logger::new(),
         }
     }
 
@@ -41,25 +42,6 @@ impl BinaryManager {
             "netcoredbg.exe"
         } else {
             "netcoredbg"
-        }
-    }
-
-    fn debug_log(&self, message: &str) {
-        if !Self::DEBUG_ENABLED {
-            return;
-        }
-
-        if let Ok(mut file) = std::fs::OpenOptions::new()
-            .create(true)
-            .append(true)
-            .open("netcoredbg_extension_debug.log")
-        {
-            use std::io::Write;
-            let timestamp = std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .unwrap_or_default()
-                .as_secs();
-            let _ = writeln!(file, "[{}] {}", timestamp, message);
         }
     }
 
@@ -150,7 +132,7 @@ impl BinaryManager {
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
 
         let temp_dir = self.create_secure_temp_dir(&version.tag_name)?;
-        self.debug_log(&format!(
+        self.logger.debug_log(&format!(
             "Created secure temp directory: {}",
             temp_dir.path().display()
         ));
@@ -255,11 +237,12 @@ impl BinaryManager {
 
     /// Gets the netcoredbg binary path, downloading if necessary
     pub fn get_binary_path(&self, user_provided_path: Option<String>) -> Result<String, String> {
-        self.debug_log("Starting get_binary_path");
+        self.logger.debug_log("Starting get_binary_path");
 
         // Priority 1: User-provided path
         if let Some(user_path) = user_provided_path {
-            self.debug_log(&format!("Using user-provided path: {}", user_path));
+            self.logger
+                .debug_log(&format!("Using user-provided path: {}", user_path));
             let path = std::path::Path::new(&user_path);
             if !path.exists() {
                 return Err(format!(
@@ -284,23 +267,27 @@ impl BinaryManager {
         // Priority 2: Check in-memory cache
         if let Some(cached_path) = self.cached_binary_path.get() {
             if std::path::Path::new(cached_path).exists() {
-                self.debug_log(&format!("Using cached binary path: {}", cached_path));
+                self.logger
+                    .debug_log(&format!("Using cached binary path: {}", cached_path));
                 return Ok(cached_path.clone());
             }
-            self.debug_log("Cached binary no longer exists, will re-download");
+            self.logger
+                .debug_log("Cached binary no longer exists, will re-download");
         }
 
         // Priority 3: Check existing binary on disk before downloading
-        self.debug_log("Fetching latest release info from GitHub to check for existing binary");
+        self.logger
+            .debug_log("Fetching latest release info from GitHub to check for existing binary");
         let version = self.fetch_latest_release()?;
-        self.debug_log(&format!("Found latest version: {}", version.tag_name));
+        self.logger
+            .debug_log(&format!("Found latest version: {}", version.tag_name));
 
         // Version-specific directory in current working directory
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
         let exe_name = Self::get_executable_name();
         let existing_binary_path = version_dir.join(exe_name);
         if existing_binary_path.exists() {
-            self.debug_log(&format!(
+            self.logger.debug_log(&format!(
                 "Found existing binary on disk: {}",
                 existing_binary_path.display()
             ));
@@ -313,9 +300,10 @@ impl BinaryManager {
         }
 
         // Priority 4: Download and extract from GitHub releases
-        self.debug_log("No existing binary found, downloading from GitHub");
+        self.logger
+            .debug_log("No existing binary found, downloading from GitHub");
         let binary_path = self.download_and_extract_binary()?;
-        self.debug_log(&format!(
+        self.logger.debug_log(&format!(
             "Successfully downloaded and extracted to: {}",
             binary_path
         ));

@@ -1,4 +1,5 @@
 mod binary_manager;
+mod logger;
 
 use binary_manager::BinaryManager;
 use serde::{Deserialize, Serialize};
