@@ -215,7 +215,7 @@ impl BinaryManager {
                 let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
                 let path = entry.path();
 
-                if path.is_file() && path.file_name().map_or(false, |name| name == exe_name) {
+                if path.is_file() && path.file_name().is_some_and(|name| name == exe_name) {
                     return Ok(Some(path));
                 } else if path.is_dir() {
                     if let Some(found) = find_binary_recursive(&path, exe_name)? {
