@@ -1,7 +1,7 @@
 use crate::logger::Logger;
+use crate::simple_temp_dir::SimpleTempDir;
 use fs_extra::dir;
 use std::sync::OnceLock;
-use tempfile::TempDir;
 use zed_extension_api::{self as zed, DownloadedFileType, GithubReleaseOptions};
 
 /// GitHub release version information
@@ -107,11 +107,8 @@ impl BinaryManager {
     }
 
     /// Creates a secure temporary directory for extraction
-    fn create_secure_temp_dir(&self, version: &str) -> Result<TempDir, String> {
-        tempfile::Builder::new()
-            .prefix(&format!("netcoredbg_v{}_", version))
-            .tempdir()
-            .map_err(|e| format!("Failed to create secure temp directory: {}", e))
+    fn create_secure_temp_dir(&self, version: &str) -> Result<SimpleTempDir, String> {
+        SimpleTempDir::new(&format!("netcoredbg_v{}_", version))
     }
 
     /// Downloads and extracts the netcoredbg binary, returning the path to the executable
@@ -168,18 +165,74 @@ impl BinaryManager {
         Ok(absolute_path.to_string_lossy().to_string())
     }
 
-    /// Copies extracted content from temp_dir into version_dir
+    /// Copies extracted content from temp_dir into version_dir, handling nested directory structure
     fn copy_extracted_content(
         &self,
         temp_dir: &std::path::Path,
         version_dir: &std::path::Path,
     ) -> Result<(), String> {
+        let exe_name = Self::get_executable_name();
+
+        let binary_source_path = self.find_binary_in_extracted_content(temp_dir, exe_name)?;
+
+        let source_dir = binary_source_path
+            .parent()
+            .ok_or_else(|| "Binary has no parent directory".to_string())?;
+
+        self.logger.debug_log(&format!(
+            "Found binary at: {}, copying from: {}",
+            binary_source_path.display(),
+            source_dir.display()
+        ));
+
         let copy_options = dir::CopyOptions::new().content_only(true);
 
-        dir::copy(temp_dir, version_dir, &copy_options)
-            .map_err(|e| format!("Failed to copy extracted content: {}", e))?;
+        dir::copy(source_dir, version_dir, &copy_options).map_err(|e| {
+            format!(
+                "Failed to copy extracted content from {}: {}",
+                source_dir.display(),
+                e
+            )
+        })?;
 
         Ok(())
+    }
+
+    /// Recursively searches for the netcoredbg binary in the extracted content
+    fn find_binary_in_extracted_content(
+        &self,
+        search_dir: &std::path::Path,
+        exe_name: &str,
+    ) -> Result<std::path::PathBuf, String> {
+        fn find_binary_recursive(
+            dir: &std::path::Path,
+            exe_name: &str,
+        ) -> Result<Option<std::path::PathBuf>, String> {
+            let entries = std::fs::read_dir(dir)
+                .map_err(|e| format!("Failed to read directory {}: {}", dir.display(), e))?;
+
+            for entry in entries {
+                let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
+                let path = entry.path();
+
+                if path.is_file() && path.file_name().map_or(false, |name| name == exe_name) {
+                    return Ok(Some(path));
+                } else if path.is_dir() {
+                    if let Some(found) = find_binary_recursive(&path, exe_name)? {
+                        return Ok(Some(found));
+                    }
+                }
+            }
+            Ok(None)
+        }
+
+        find_binary_recursive(search_dir, exe_name)?.ok_or_else(|| {
+            format!(
+                "Could not find {} binary in extracted content at {}",
+                exe_name,
+                search_dir.display()
+            )
+        })
     }
 
     /// Gets the netcoredbg binary path, downloading if necessary
