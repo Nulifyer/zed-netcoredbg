@@ -106,8 +106,8 @@ impl BinaryManager {
         })
     }
 
-    /// Creates a secure temporary directory for extraction
-    fn create_secure_temp_dir(&self, version: &str) -> Result<SimpleTempDir, String> {
+    /// Creates a temporary directory for extraction
+    fn create_temp_dir(&self, version: &str) -> Result<SimpleTempDir, String> {
         SimpleTempDir::new(&format!("netcoredbg_v{}_", version))
     }
 
@@ -127,7 +127,7 @@ impl BinaryManager {
         // Version-specific directory in current working directory
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
 
-        let temp_dir = self.create_secure_temp_dir(&version.tag_name)?;
+        let temp_dir = self.create_temp_dir(&version.tag_name)?;
         self.logger.debug_log(&format!(
             "Created secure temp directory: {}",
             temp_dir.path().display()
