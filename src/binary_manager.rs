@@ -1,4 +1,5 @@
 use crate::logger::Logger;
+use fs_extra::dir;
 use std::sync::OnceLock;
 use tempfile::TempDir;
 use zed_extension_api::{self as zed, DownloadedFileType, GithubReleaseOptions};
@@ -145,7 +146,7 @@ impl BinaryManager {
         std::fs::create_dir_all(&version_dir)
             .map_err(|e| format!("Failed to create version directory: {}", e))?;
 
-        self.flatten_extracted_content(temp_dir.path(), &version_dir)?;
+        self.copy_extracted_content(temp_dir.path(), &version_dir)?;
 
         let exe_name = Self::get_executable_name();
 
@@ -167,67 +168,16 @@ impl BinaryManager {
         Ok(absolute_path.to_string_lossy().to_string())
     }
 
-    /// Flattens extracted content from temp_dir into version_dir
-    fn flatten_extracted_content(
+    /// Copies extracted content from temp_dir into version_dir
+    fn copy_extracted_content(
         &self,
         temp_dir: &std::path::Path,
         version_dir: &std::path::Path,
     ) -> Result<(), String> {
-        let entries = std::fs::read_dir(temp_dir)
-            .map_err(|e| format!("Failed to read temp directory: {}", e))?;
+        let copy_options = dir::CopyOptions::new().content_only(true);
 
-        let mut found_content = false;
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-            let path = entry.path();
-
-            if path.is_dir() {
-                // If there's a subdirectory, move its contents to version_dir
-                Self::move_directory_contents(&path, version_dir)?;
-                found_content = true;
-            } else {
-                // If there are files directly in temp_dir, move them
-                let file_name = path
-                    .file_name()
-                    .ok_or_else(|| "Invalid file name".to_string())?;
-                let dest = version_dir.join(file_name);
-                std::fs::rename(&path, &dest).map_err(|e| format!("Failed to move file: {}", e))?;
-                found_content = true;
-            }
-        }
-
-        if !found_content {
-            return Err("No content found in extracted archive".to_string());
-        }
-
-        Ok(())
-    }
-
-    /// Recursively moves all contents from source directory to destination directory
-    fn move_directory_contents(
-        source: &std::path::Path,
-        dest: &std::path::Path,
-    ) -> Result<(), String> {
-        let entries = std::fs::read_dir(source)
-            .map_err(|e| format!("Failed to read source directory: {}", e))?;
-
-        for entry in entries {
-            let entry = entry.map_err(|e| format!("Failed to read directory entry: {}", e))?;
-            let source_path = entry.path();
-            let file_name = source_path
-                .file_name()
-                .ok_or_else(|| "Invalid file name".to_string())?;
-            let dest_path = dest.join(file_name);
-
-            if source_path.is_dir() {
-                std::fs::create_dir_all(&dest_path)
-                    .map_err(|e| format!("Failed to create directory: {}", e))?;
-                Self::move_directory_contents(&source_path, &dest_path)?;
-            } else {
-                std::fs::rename(&source_path, &dest_path)
-                    .map_err(|e| format!("Failed to move file: {}", e))?;
-            }
-        }
+        dir::copy(temp_dir, version_dir, &copy_options)
+            .map_err(|e| format!("Failed to copy extracted content: {}", e))?;
 
         Ok(())
     }
