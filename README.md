@@ -29,7 +29,8 @@ Example `.zed/debug.json` to add a new launch debug configuration:
     "program": "${ZED_WORKTREE_ROOT}/apps/backend/Example/bin/Debug/net8.0/Example.dll",
     "cwd": "${ZED_WORKTREE_ROOT}/apps/backend/Example",
     "env": {
-      "ASPNETCORE_ENVIRONMENT": "Development"
+      "ASPNETCORE_ENVIRONMENT": "Development",
+      "ASPNETCORE_URLS": "http://localhost:5243"
     },
     "build": {
       "command": "dotnet",
