@@ -69,6 +69,8 @@ The extension automatically tries to download netcoredbg's executable. Or you ca
 }
 ```
 
+_Note: Make sure the binary is executable._
+
 ## Why netcoredbg?
 
 While Microsoft provides official debugging libraries for .NET Core (`Microsoft.VisualStudio.clrdbg`), these come with [restrictive licensing terms](https://github.com/dotnet/core/issues/505) that limit their use to specific IDEs like Visual Studio Code. This licensing restriction has prevented many third-party editors and IDEs from offering .NET debugging support.

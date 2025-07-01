@@ -238,30 +238,11 @@ impl BinaryManager {
     /// Gets the netcoredbg binary path, downloading if necessary
     pub fn get_binary_path(&self, user_provided_path: Option<String>) -> Result<String, String> {
         self.logger.debug_log("Starting get_binary_path");
-
-        // Priority 1: User-provided path
+        // Priority 1: User-provided path return as is without any validation
         if let Some(user_path) = user_provided_path {
             self.logger
                 .debug_log(&format!("Using user-provided path: {}", user_path));
-            let path = std::path::Path::new(&user_path);
-            if !path.exists() {
-                return Err(format!(
-                    "User-provided netcoredbg binary not found at: {}",
-                    user_path
-                ));
-            }
-            if !path.is_file() {
-                return Err(format!("User-provided path is not a file: {}", user_path));
-            }
-            // Convert to absolute path for consistency
-            let current_dir = std::env::current_dir()
-                .map_err(|e| format!("Failed to get current directory: {}", e))?;
-            let absolute_path = if path.is_absolute() {
-                path.to_path_buf()
-            } else {
-                current_dir.join(path)
-            };
-            return Ok(absolute_path.to_string_lossy().to_string());
+            return Ok(user_path);
         }
 
         // Priority 2: Check in-memory cache
@@ -310,11 +291,13 @@ impl BinaryManager {
 
         let _ = self.cached_binary_path.set(binary_path.clone());
 
+        self.validate_binary(&binary_path)?;
+
         Ok(binary_path)
     }
 
     /// Validates that the binary exists
-    pub fn validate_binary(&self, binary_path: &str) -> Result<(), String> {
+    fn validate_binary(&self, binary_path: &str) -> Result<(), String> {
         let path = std::path::Path::new(binary_path);
 
         if !path.exists() {

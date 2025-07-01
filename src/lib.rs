@@ -88,8 +88,6 @@ impl zed::Extension for NetCoreDbgExtension {
             .binary_manager
             .get_binary_path(user_provided_debug_adapter_path)?;
 
-        self.binary_manager.validate_binary(&binary_path)?;
-
         Ok(DebugAdapterBinary {
             command: Some(binary_path),
             arguments: vec!["--interpreter=vscode".to_string()],
