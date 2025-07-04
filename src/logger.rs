@@ -1,17 +1,23 @@
 use std::io::Write;
+use std::sync::OnceLock;
 
 pub struct Logger;
+
+static LOGGER: OnceLock<Logger> = OnceLock::new();
 
 impl Logger {
     /// Enable/disable debug logging - set to false for production
     const DEBUG_ENABLED: bool = true;
 
-    pub fn new() -> Self {
-        Self
+    pub fn instance() -> &'static Logger {
+        LOGGER.get_or_init(|| Logger)
     }
 
-    /// Logs a debug message with timestamp
-    pub fn debug_log(&self, message: &str) {
+    pub fn debug(message: &str) {
+        Self::instance().debug_log(message);
+    }
+
+    fn debug_log(&self, message: &str) {
         if !Self::DEBUG_ENABLED {
             return;
         }

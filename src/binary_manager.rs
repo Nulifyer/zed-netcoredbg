@@ -13,12 +13,9 @@ pub struct AdapterVersion {
     pub download_url: String,
 }
 
-/// NetCoreDbg binary manager - handles downloading, extracting, and locating the netcoredbg binary
 pub struct BinaryManager {
     /// Cached path to the netcoredbg binary - set once and reused
     cached_binary_path: OnceLock<String>,
-    /// Logger instance for debug logging
-    logger: Logger,
 }
 
 impl Default for BinaryManager {
@@ -34,7 +31,6 @@ impl BinaryManager {
     pub fn new() -> Self {
         Self {
             cached_binary_path: OnceLock::new(),
-            logger: Logger::new(),
         }
     }
 
@@ -128,7 +124,7 @@ impl BinaryManager {
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
 
         let temp_dir = self.create_temp_dir(&version.tag_name)?;
-        self.logger.debug_log(&format!(
+        Logger::debug(&format!(
             "Created secure temp directory: {}",
             temp_dir.path().display()
         ));
@@ -179,7 +175,7 @@ impl BinaryManager {
             .parent()
             .ok_or_else(|| "Binary has no parent directory".to_string())?;
 
-        self.logger.debug_log(&format!(
+        Logger::debug(&format!(
             "Found binary at: {}, copying from: {}",
             binary_source_path.display(),
             source_dir.display()
@@ -237,38 +233,33 @@ impl BinaryManager {
 
     /// Gets the netcoredbg binary path, downloading if necessary
     pub fn get_binary_path(&self, user_provided_path: Option<String>) -> Result<String, String> {
-        self.logger.debug_log("Starting get_binary_path");
+        Logger::debug("Starting get_binary_path");
         // Priority 1: User-provided path return as is without any validation
         if let Some(user_path) = user_provided_path {
-            self.logger
-                .debug_log(&format!("Using user-provided path: {}", user_path));
+            Logger::debug(&format!("Using user-provided path: {}", user_path));
             return Ok(user_path);
         }
 
         // Priority 2: Check in-memory cache
         if let Some(cached_path) = self.cached_binary_path.get() {
             if std::path::Path::new(cached_path).exists() {
-                self.logger
-                    .debug_log(&format!("Using cached binary path: {}", cached_path));
+                Logger::debug(&format!("Using cached binary path: {}", cached_path));
                 return Ok(cached_path.clone());
             }
-            self.logger
-                .debug_log("Cached binary no longer exists, will re-download");
+            Logger::debug("Cached binary no longer exists, will re-download");
         }
 
         // Priority 3: Check existing binary on disk before downloading
-        self.logger
-            .debug_log("Fetching latest release info from GitHub to check for existing binary");
+        Logger::debug("Fetching latest release info from GitHub to check for existing binary");
         let version = self.fetch_latest_release()?;
-        self.logger
-            .debug_log(&format!("Found latest version: {}", version.tag_name));
+        Logger::debug(&format!("Found latest version: {}", version.tag_name));
 
         // Version-specific directory in current working directory
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
         let exe_name = Self::get_executable_name();
         let existing_binary_path = version_dir.join(exe_name);
         if existing_binary_path.exists() {
-            self.logger.debug_log(&format!(
+            Logger::debug(&format!(
                 "Found existing binary on disk: {}",
                 existing_binary_path.display()
             ));
@@ -281,10 +272,9 @@ impl BinaryManager {
         }
 
         // Priority 4: Download and extract from GitHub releases
-        self.logger
-            .debug_log("No existing binary found, downloading from GitHub");
+        Logger::debug("No existing binary found, downloading from GitHub");
         let binary_path = self.download_and_extract_binary()?;
-        self.logger.debug_log(&format!(
+        Logger::debug(&format!(
             "Successfully downloaded and extracted to: {}",
             binary_path
         ));
