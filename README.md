@@ -2,7 +2,7 @@
 
 A Zed extension that provides debugging support for .NET applications using [netcoredbg](https://github.com/Samsung/netcoredbg).
 
-Currently only support Mac arm64 due to an upstream [issue with netcoredbg](https://github.com/Samsung/netcoredbg/issues/197).
+Currently only support Mac arm64 and Linux AMD64 due to an upstream [issue with netcoredbg](https://github.com/Samsung/netcoredbg/issues/197).
 
 ## Installation
 
