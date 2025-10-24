@@ -25,7 +25,7 @@ impl Default for BinaryManager {
 }
 
 impl BinaryManager {
-    const GITHUB_OWNER: &str = "qwadrox";
+    const GITHUB_OWNER: &str = "marcptrs";
     const GITHUB_REPO: &str = "netcoredbg";
 
     pub fn new() -> Self {
