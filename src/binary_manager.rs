@@ -44,33 +44,31 @@ impl BinaryManager {
 
     /// Determines the appropriate asset name for the current platform
     /// Supported assets:
-    /// - netcoredbg-linux-amd64.tar.gz
-    /// - netcoredbg-linux-arm64.tar.gz  
-    /// - netcoredbg-osx-amd64.tar.gz
+    /// - netcoredbg-linux-arm.tar.gz
+    /// - netcoredbg-linux-arm64.tar.gz
+    /// - netcoredbg-linux-x64.tar.gz
+    /// - netcoredbg-linux-x86.tar.gz
     /// - netcoredbg-osx-arm64.tar.gz
-    /// - netcoredbg-win64.zip
+    /// - netcoredbg-osx-x64.tar.gz
+    /// - netcoredbg-win-x64.zip
+    /// - netcoredbg-win-x86.zip
     fn get_platform_asset_name() -> Result<String, String> {
         let (platform, arch) = zed::current_platform();
 
         let (platform_arch, extension) = match (platform, arch) {
-            (zed::Os::Linux, zed::Architecture::X8664) => ("linux-amd64", ".tar.gz"),
-            (zed::Os::Linux, zed::Architecture::Aarch64) => ("linux-arm64", ".tar.gz"),
-            (zed::Os::Mac, zed::Architecture::X8664) => ("osx-amd64", ".tar.gz"),
-            (zed::Os::Mac, zed::Architecture::Aarch64) => ("osx-arm64", ".tar.gz"),
-            (zed::Os::Windows, zed::Architecture::X8664) => ("win64", ".zip"),
-            (zed::Os::Windows, zed::Architecture::Aarch64) => {
-                // Windows ARM64 is not officially supported by netcoredbg,
-                // but we can try the x64 version as a fallback
-                ("win64", ".zip")
-            }
-            (_, zed::Architecture::X86) => {
-                return Err("Unsupported architecture: x86 (32-bit). NetCoreDbg only supports 64-bit architectures (amd64/arm64).".to_string());
-            }
+            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::Aarch64) => ("linux-arm64", ".tar.gz"),
+            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::X86) => ("linux-x86", ".tar.gz"),
+            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::X8664) => ("linux-x64", ".tar.gz"),
+            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::Aarch64) => ("osx-arm64", ".tar.gz"),
+            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::X86) => ("osx-x86", ".tar.gz"),
+            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::X8664) => ("osx-x64", ".tar.gz"),
+            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::Aarch64) => ("win-x64", ".zip"),
+            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::X86) => ("win-x86", ".zip"),
+            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::X8664) => ("win-x64", ".zip"),
         };
-
         Ok(format!("netcoredbg-{}{}", platform_arch, extension))
     }
-
+    
     /// Fetches the latest release information from GitHub
     fn fetch_latest_release(&self) -> Result<AdapterVersion, String> {
         let release = zed::latest_github_release(
