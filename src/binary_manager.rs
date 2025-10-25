@@ -1,5 +1,4 @@
 use crate::logger::Logger;
-use crate::simple_temp_dir::SimpleTempDir;
 use fs_extra::dir;
 use std::sync::OnceLock;
 use zed_extension_api::{self as zed, DownloadedFileType, GithubReleaseOptions};
@@ -35,10 +34,9 @@ impl BinaryManager {
     }
 
     fn get_executable_name() -> &'static str {
-        if zed::current_platform().0 == zed::Os::Windows {
-            "netcoredbg.exe"
-        } else {
-            "netcoredbg"
+        match zed::current_platform().0 {
+            zed::Os::Windows => "netcoredbg.exe",
+            _ => "netcoredbg",
         }
     }
 
@@ -56,19 +54,37 @@ impl BinaryManager {
         let (platform, arch) = zed::current_platform();
 
         let (platform_arch, extension) = match (platform, arch) {
-            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::Aarch64) => ("linux-arm64", ".tar.gz"),
-            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::X86) => ("linux-x86", ".tar.gz"),
-            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::X8664) => ("linux-x64", ".tar.gz"),
-            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::Aarch64) => ("osx-arm64", ".tar.gz"),
-            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::X86) => ("osx-x86", ".tar.gz"),
-            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::X8664) => ("osx-x64", ".tar.gz"),
-            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::Aarch64) => ("win-x64", ".zip"),
-            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::X86) => ("win-x86", ".zip"),
-            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::X8664) => ("win-x64", ".zip"),
+            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::Aarch64) => {
+                ("linux-arm64", ".tar.gz")
+            }
+            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::X86) => {
+                ("linux-x86", ".tar.gz")
+            }
+            (zed_extension_api::Os::Linux, zed_extension_api::Architecture::X8664) => {
+                ("linux-x64", ".tar.gz")
+            }
+            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::Aarch64) => {
+                ("osx-arm64", ".tar.gz")
+            }
+            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::X86) => {
+                ("osx-x86", ".tar.gz")
+            }
+            (zed_extension_api::Os::Mac, zed_extension_api::Architecture::X8664) => {
+                ("osx-x64", ".tar.gz")
+            }
+            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::Aarch64) => {
+                ("win-x64", ".zip")
+            }
+            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::X86) => {
+                ("win-x86", ".zip")
+            }
+            (zed_extension_api::Os::Windows, zed_extension_api::Architecture::X8664) => {
+                ("win-x64", ".zip")
+            }
         };
         Ok(format!("netcoredbg-{}{}", platform_arch, extension))
     }
-    
+
     /// Fetches the latest release information from GitHub
     fn fetch_latest_release(&self) -> Result<AdapterVersion, String> {
         let release = zed::latest_github_release(
@@ -100,11 +116,6 @@ impl BinaryManager {
         })
     }
 
-    /// Creates a temporary directory for extraction
-    fn create_temp_dir(&self, version: &str) -> Result<SimpleTempDir, String> {
-        SimpleTempDir::new(&format!("netcoredbg_v{}_", version))
-    }
-
     /// Downloads and extracts the netcoredbg binary, returning the path to the executable
     fn download_and_extract_binary(&self) -> Result<String, String> {
         let version = self.fetch_latest_release()?;
@@ -118,29 +129,25 @@ impl BinaryManager {
             return Err(format!("Unsupported file type for asset: {}", asset_name));
         };
 
-        // Version-specific directory in current working directory
+        let temp_dir = std::path::PathBuf::from(format!("temp_netcoredbg_v{}", version.tag_name));
+        std::fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to create temp directory: {}", e))?;
+
+        let temp_dir_str = temp_dir
+            .clone()
+            .into_os_string()
+            .into_string()
+            .map_err(|_| "Failed to convert temp_dir path to string".to_string())?;
+        zed_extension_api::download_file(&version.download_url, &temp_dir_str, file_type)
+            .map_err(|e| format!("Failed to download netcoredbg: {}", e))?;
+
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
-
-        let temp_dir = self.create_temp_dir(&version.tag_name)?;
-        Logger::debug(&format!(
-            "Created secure temp directory: {}",
-            temp_dir.path().display()
-        ));
-
-        zed::download_file(
-            &version.download_url,
-            &temp_dir.path().to_string_lossy(),
-            file_type,
-        )
-        .map_err(|e| format!("Failed to download netcoredbg: {}", e))?;
-
         std::fs::create_dir_all(&version_dir)
             .map_err(|e| format!("Failed to create version directory: {}", e))?;
 
-        self.copy_extracted_content(temp_dir.path(), &version_dir)?;
+        self.copy_extracted_content(&temp_dir, &version_dir)?;
 
         let exe_name = Self::get_executable_name();
-
         let binary_path = version_dir.join(exe_name);
 
         if !binary_path.exists() {
@@ -150,13 +157,14 @@ impl BinaryManager {
             ));
         }
 
-        zed::make_file_executable(&binary_path.to_string_lossy())
+        std::fs::remove_dir_all(temp_dir)
+            .map_err(|e| format!("Failed to remove temp directory: {}", e))?;
+
+        let binary_path_str = Self::to_os_full_path_str(&binary_path)?;
+        zed::make_file_executable(&binary_path_str)
             .map_err(|e| format!("Failed to make file executable: {}", e))?;
 
-        let current_dir = std::env::current_dir()
-            .map_err(|e| format!("Failed to get current directory: {}", e))?;
-        let absolute_path = current_dir.join(&binary_path);
-        Ok(absolute_path.to_string_lossy().to_string())
+        Ok(binary_path_str)
     }
 
     /// Copies extracted content from temp_dir into version_dir, handling nested directory structure
@@ -232,6 +240,7 @@ impl BinaryManager {
     /// Gets the netcoredbg binary path, downloading if necessary
     pub fn get_binary_path(&self, user_provided_path: Option<String>) -> Result<String, String> {
         Logger::debug("Starting get_binary_path");
+
         // Priority 1: User-provided path return as is without any validation
         if let Some(user_path) = user_provided_path {
             Logger::debug(&format!("Using user-provided path: {}", user_path));
@@ -252,19 +261,17 @@ impl BinaryManager {
         let version = self.fetch_latest_release()?;
         Logger::debug(&format!("Found latest version: {}", version.tag_name));
 
-        // Version-specific directory in current working directory
         let version_dir = std::path::PathBuf::from(format!("netcoredbg_v{}", version.tag_name));
         let exe_name = Self::get_executable_name();
-        let existing_binary_path = version_dir.join(exe_name);
+        let existing_binary_path = Self::absolute_path(&version_dir.join(exe_name))?;
+
         if existing_binary_path.exists() {
             Logger::debug(&format!(
                 "Found existing binary on disk: {}",
                 existing_binary_path.display()
             ));
-            let current_dir = std::env::current_dir()
-                .map_err(|e| format!("Failed to get current directory: {}", e))?;
-            let absolute_path = current_dir.join(&existing_binary_path);
-            let path_str = absolute_path.to_string_lossy().to_string();
+            // Convert PathBuf -> String safely for caching
+            let path_str = Self::to_os_full_path_str(&existing_binary_path)?;
             let _ = self.cached_binary_path.set(path_str.clone());
             return Ok(path_str);
         }
@@ -297,5 +304,33 @@ impl BinaryManager {
         }
 
         Ok(())
+    }
+
+    fn absolute_path(path: &std::path::PathBuf) -> Result<std::path::PathBuf, String> {
+        if path.is_absolute() {
+            Ok(path.to_path_buf())
+        } else {
+            std::env::current_dir()
+                .map_err(|e| format!("Failed to get current dir: {}", e))
+                .map(|cwd| cwd.join(path))
+        }
+    }
+
+    fn to_os_full_path_str(path: &std::path::PathBuf) -> Result<String, String> {
+        let los = path.to_string_lossy();
+
+        let s = match zed::current_platform().0 {
+            zed::Os::Windows => {
+                // Remove leading '/' if it precedes a drive letter (e.g. "/C:/path")
+                if los.starts_with('/') && los.chars().nth(2) == Some(':') {
+                    los[1..].to_string()
+                } else {
+                    los.to_string()
+                }
+            }
+            _ => los.to_string(),
+        };
+
+        Ok(s)
     }
 }
